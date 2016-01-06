@@ -18,7 +18,7 @@ class URLShortenerRequestTests: XCTestCase {
         let request = URLShortenerRequest(APIKey: "foo", URL: sampleURL)
         let body = String(data: request.URLRequest.HTTPBody!, encoding: NSUTF8StringEncoding)
         XCTAssertEqual(body, "{\"longUrl\":\"https:\\/\\/developers.google.com\\/\"}")
-        XCTAssertEqual(request.URLRequest.HTTPMethod, "GET")
+        XCTAssertEqual(request.URLRequest.HTTPMethod, "POST")
         XCTAssertEqual(request.URLRequest.valueForHTTPHeaderField("Content-Type"), "application/json")
     }
 

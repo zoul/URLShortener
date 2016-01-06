@@ -24,6 +24,7 @@ public class URLShortenerRequest {
     var URLRequest: NSURLRequest {
         let request = NSMutableURLRequest(URL: targetURL)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.HTTPMethod = "POST"
         request.HTTPBody = try! NSJSONSerialization.dataWithJSONObject(["longUrl": URL.absoluteString], options: [])
         return request
     }
