@@ -1,6 +1,8 @@
 1.1.0 2016/1/6
     - Fixed a HTTP method error, makes the request actually usable.
       (http://stackoverflow.com/questions/34629177)
+    - Added an OS X framework target.
+    - Added an Xcode playground.
 
 1.0.1 2016/1/5
     - First release.
