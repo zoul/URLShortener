@@ -17,12 +17,12 @@ public class URLShortenerRequest {
         self.URL = URL
     }
 
-    var targetURL: NSURL {
+    var targetAPIURL: NSURL {
         return NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=" + APIKey.URLEncodedString)!
     }
 
     var URLRequest: NSURLRequest {
-        let request = NSMutableURLRequest(URL: targetURL)
+        let request = NSMutableURLRequest(URL: targetAPIURL)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.HTTPMethod = "POST"
         request.HTTPBody = try! NSJSONSerialization.dataWithJSONObject(["longUrl": URL.absoluteString], options: [])
@@ -39,48 +39,64 @@ public class URLShortenerRequest {
         return shortURL
     }
 
-    public func getShortURL() throws -> NSURL {
-
-        let semaphore = dispatch_semaphore_create(0)
-        var maybeResponseData: NSData? = nil
-        var maybeResponse: NSHTTPURLResponse? = nil
-        var maybeError: NSError? = nil
+    public func getShortURL(completion: (NSURL?, URLShortenerError?) -> Void) {
 
         let task = NSURLSession.sharedSession().dataTaskWithRequest(URLRequest) {
-            maybeResponseData = $0
-            maybeResponse = $1 as? NSHTTPURLResponse
-            maybeError = $2
-            dispatch_semaphore_signal(semaphore)
+            (responseData, response, error) in
+
+            // Basic connectivity issues: no network etc.
+            if let error = error {
+                completion(nil, URLShortenerError.NetworkError(error: error))
+                return
+            }
+
+            // Weird case where there’s no response and no error
+            guard let response = response as? NSHTTPURLResponse else {
+                completion(nil, URLShortenerError.UnexpectedError(
+                    description: "No response from server"))
+                return
+            }
+
+            // Plain HTTP error
+            if response.statusCode < 200 || response.statusCode > 299 {
+                completion(nil, URLShortenerError.HTTPError(response: response))
+                return
+            }
+
+            // Weird case where we get HTTP success, but no response
+            guard let responseData = responseData else {
+                completion(nil, URLShortenerError.UnexpectedError(
+                    description: "Server returned no error, but no response data either"))
+                return
+            }
+
+            // Parsing errors
+            guard let shortURL = self.parseResponseData(responseData) else {
+                completion(nil, URLShortenerError.ResponseParseError)
+                return
+            }
+
+            completion(shortURL, nil)
         }
 
         task.resume()
+    }
+
+    public func getShortURL() throws -> NSURL {
+        let semaphore = dispatch_semaphore_create(0)
+        var shortURL: NSURL?
+        var error: URLShortenerError?
+        getShortURL {
+            shortURL = $0
+            error = $1
+            dispatch_semaphore_signal(semaphore)
+        }
         dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER)
-
-        // Basic connectivity issues: no network etc.
-        if let error = maybeError {
-            throw URLShortenerError.NetworkError(error: error)
+        if let error = error {
+            throw error
+        } else {
+            return shortURL!
         }
-
-        // Weird case where there’s no response and no error
-        guard let response = maybeResponse else {
-            throw URLShortenerError.UnexpectedError(description: "No response from server")
-        }
-
-        // Plain HTTP error
-        if response.statusCode < 200 || response.statusCode > 299 {
-            throw URLShortenerError.HTTPError(response: response)
-        }
-
-        // Weird case where we get HTTP success, but no response
-        guard let responseData = maybeResponseData else {
-            throw URLShortenerError.UnexpectedError(description: "Server returned no error, but no response either")
-        }
-
-        // Parsing errors
-        guard let shortURL = parseResponseData(responseData)
-            else { throw URLShortenerError.ResponseParseError }
-        
-        return shortURL
     }
 }
 

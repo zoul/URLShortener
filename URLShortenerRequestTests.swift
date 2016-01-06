@@ -4,14 +4,14 @@ class URLShortenerRequestTests: XCTestCase {
 
     let sampleURL = NSURL(string: "https://developers.google.com/")!
 
-    func testURLBuilding() {
+    func testAPIURLBuilding() {
         let request = URLShortenerRequest(APIKey: "foo", URL: sampleURL)
-        XCTAssertEqual(request.targetURL, NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=foo"))
+        XCTAssertEqual(request.targetAPIURL, NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=foo"))
     }
 
     func testKeyEscaping() {
         let request = URLShortenerRequest(APIKey: "foo=bar", URL: sampleURL)
-        XCTAssertEqual(request.targetURL, NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=foo%3Dbar"))
+        XCTAssertEqual(request.targetAPIURL, NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=foo%3Dbar"))
     }
 
     func testURLRequestBuilding() {
