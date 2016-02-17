@@ -1,10 +1,11 @@
 import Foundation
 
-public enum URLShortenerError: ErrorType {
+public enum URLShortenerResult: ErrorType {
     case UnexpectedError(description: String)
     case HTTPError(response: NSURLResponse)
     case NetworkError(error: NSError)
     case ResponseParseError
+    case Success(NSURL)
 }
 
 public class URLShortenerRequest {
@@ -39,64 +40,56 @@ public class URLShortenerRequest {
         return shortURL
     }
 
-    public func getShortURL(completion: (NSURL?, URLShortenerError?) -> Void) {
+    public func getShortURL(completion: URLShortenerResult -> Void) {
 
         let task = NSURLSession.sharedSession().dataTaskWithRequest(URLRequest) {
-            (responseData, response, error) in
+            responseData, response, error in
 
             // Basic connectivity issues: no network etc.
             if let error = error {
-                completion(nil, URLShortenerError.NetworkError(error: error))
+                completion(.NetworkError(error: error))
                 return
             }
 
             // Weird case where there’s no response and no error
             guard let response = response as? NSHTTPURLResponse else {
-                completion(nil, URLShortenerError.UnexpectedError(
-                    description: "No response from server"))
+                completion(.UnexpectedError(description: "No response from server"))
                 return
             }
 
             // Plain HTTP error
             if response.statusCode < 200 || response.statusCode > 299 {
-                completion(nil, URLShortenerError.HTTPError(response: response))
+                completion(.HTTPError(response: response))
                 return
             }
 
             // Weird case where we get HTTP success, but no response
             guard let responseData = responseData else {
-                completion(nil, URLShortenerError.UnexpectedError(
-                    description: "Server returned no error, but no response data either"))
+                completion(.UnexpectedError(description: "Server returned no error, but no response data either"))
                 return
             }
 
             // Parsing errors
             guard let shortURL = self.parseResponseData(responseData) else {
-                completion(nil, URLShortenerError.ResponseParseError)
+                completion(.ResponseParseError)
                 return
             }
 
-            completion(shortURL, nil)
+            completion(.Success(shortURL))
         }
 
         task.resume()
     }
 
-    public func getShortURL() throws -> NSURL {
+    public func getShortURL() -> URLShortenerResult {
         let semaphore = dispatch_semaphore_create(0)
-        var shortURL: NSURL?
-        var error: URLShortenerError?
+        var result: URLShortenerResult?
         getShortURL {
-            shortURL = $0
-            error = $1
+            result = $0
             dispatch_semaphore_signal(semaphore)
         }
         dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER)
-        if let error = error {
-            throw error
-        } else {
-            return shortURL!
-        }
+        return result!
     }
 }
 

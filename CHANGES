@@ -1,3 +1,6 @@
+1.2.0 2016/2/17
+    - Simplified result handling.
+
 1.1.0 2016/1/6
     - Fixed a HTTP method error, makes the request actually usable.
       (http://stackoverflow.com/questions/34629177)
