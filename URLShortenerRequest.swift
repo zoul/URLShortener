@@ -1,94 +1,94 @@
 import Foundation
 
-public enum URLShortenerResult: ErrorType {
-    case UnexpectedError(description: String)
-    case HTTPError(response: NSURLResponse)
-    case NetworkError(error: NSError)
-    case ResponseParseError
-    case Success(NSURL)
+public enum URLShortenerResult: Error {
+    case unexpectedError(description: String)
+    case httpError(response: URLResponse)
+    case networkError(error: NSError)
+    case responseParseError
+    case success(URL)
 }
 
-public class URLShortenerRequest {
+open class URLShortenerRequest {
 
-    public let APIKey: String
-    public let URL: NSURL
+    open let APIKey: String
+    open let URL: Foundation.URL
 
-    public init(APIKey: String, URL: NSURL) {
+    public init(APIKey: String, URL: Foundation.URL) {
         self.APIKey = APIKey
         self.URL = URL
     }
 
-    var targetAPIURL: NSURL {
-        return NSURL(string: "https://www.googleapis.com/urlshortener/v1/url?key=" + APIKey.URLEncodedString)!
+    var targetAPIURL: Foundation.URL {
+        return Foundation.URL(string: "https://www.googleapis.com/urlshortener/v1/url?key=" + APIKey.URLEncodedString)!
     }
 
-    var URLRequest: NSURLRequest {
-        let request = NSMutableURLRequest(URL: targetAPIURL)
+    var URLRequest: Foundation.URLRequest {
+        let request = NSMutableURLRequest(url: targetAPIURL)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.HTTPMethod = "POST"
-        request.HTTPBody = try! NSJSONSerialization.dataWithJSONObject(["longUrl": URL.absoluteString], options: [])
-        return request
+        request.httpMethod = "POST"
+        request.httpBody = try! JSONSerialization.data(withJSONObject: ["longUrl": URL.absoluteString], options: [])
+        return request as URLRequest
     }
 
-    func parseResponseData(data: NSData) -> NSURL? {
+    func parseResponseData(_ data: Data) -> Foundation.URL? {
         guard
-            let parsedResponse = try? NSJSONSerialization.JSONObjectWithData(data, options: []),
+            let parsedResponse = try? JSONSerialization.jsonObject(with: data, options: []),
             let responseDict = parsedResponse as? NSDictionary,
             let shortURLString = responseDict["id"] as? String,
-            let shortURL = NSURL(string: shortURLString)
+            let shortURL = Foundation.URL(string: shortURLString)
             else { return nil }
         return shortURL
     }
 
-    public func getShortURL(completion: URLShortenerResult -> Void) {
+    open func getShortURL(_ completion: @escaping (URLShortenerResult) -> Void) {
 
-        let task = NSURLSession.sharedSession().dataTaskWithRequest(URLRequest) {
+        let task = URLSession.shared.dataTask(with: URLRequest, completionHandler: {
             responseData, response, error in
 
             // Basic connectivity issues: no network etc.
             if let error = error {
-                completion(.NetworkError(error: error))
+                completion(.networkError(error: error as NSError))
                 return
             }
 
             // Weird case where there’s no response and no error
-            guard let response = response as? NSHTTPURLResponse else {
-                completion(.UnexpectedError(description: "No response from server"))
+            guard let response = response as? HTTPURLResponse else {
+                completion(.unexpectedError(description: "No response from server"))
                 return
             }
 
             // Plain HTTP error
             if response.statusCode < 200 || response.statusCode > 299 {
-                completion(.HTTPError(response: response))
+                completion(.httpError(response: response))
                 return
             }
 
             // Weird case where we get HTTP success, but no response
             guard let responseData = responseData else {
-                completion(.UnexpectedError(description: "Server returned no error, but no response data either"))
+                completion(.unexpectedError(description: "Server returned no error, but no response data either"))
                 return
             }
 
             // Parsing errors
             guard let shortURL = self.parseResponseData(responseData) else {
-                completion(.ResponseParseError)
+                completion(.responseParseError)
                 return
             }
 
-            completion(.Success(shortURL))
-        }
+            completion(.success(shortURL))
+        }) 
 
         task.resume()
     }
 
-    public func getShortURL() -> URLShortenerResult {
-        let semaphore = dispatch_semaphore_create(0)
+    open func getShortURL() -> URLShortenerResult {
+        let semaphore = DispatchSemaphore(value: 0)
         var result: URLShortenerResult?
         getShortURL {
             result = $0
-            dispatch_semaphore_signal(semaphore)
+            semaphore.signal()
         }
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER)
+        _ = semaphore.wait(timeout: DispatchTime.distantFuture)
         return result!
     }
 }
@@ -97,7 +97,7 @@ private extension String {
 
     // http://stackoverflow.com/a/1455639/17279
     var URLEncodedString: String {
-        let customAllowedSet = NSCharacterSet(charactersInString:":/?#[]@!$&'()*+,;=").invertedSet
-        return stringByAddingPercentEncodingWithAllowedCharacters(customAllowedSet)!
+        let customAllowedSet = CharacterSet(charactersIn:":/?#[]@!$&'()*+,;=").inverted
+        return addingPercentEncoding(withAllowedCharacters: customAllowedSet)!
     }
 }
